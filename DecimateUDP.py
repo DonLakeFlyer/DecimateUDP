@@ -24,7 +24,7 @@ def DecimateUDP():
     stagedFactors           = stagedDecimateFactors(incomingSampleRate, outgoingSampleRate)
 
     udpReceiver = CSingleUDPReceiver("127.0.0.1", 10000)
-    udpSender   = CSingleUDPSender  ("10.0.0.180", 20000)
+    udpSender   = CSingleUDPSender  ("127.0.0.1", 20000)
 
     while True:
         iqData  = udpReceiver.read(iqSamplesPerFrame);
