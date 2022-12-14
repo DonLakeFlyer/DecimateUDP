@@ -1,4 +1,5 @@
 from CSingleUDPReceiver     import *
+from CSingleUDPSender       import *
 from stagedDecimateFactors  import *
 
 
@@ -23,6 +24,7 @@ def DecimateUDP():
     stagedFactors           = stagedDecimateFactors(incomingSampleRate, outgoingSampleRate)
 
     udpReceiver = CSingleUDPReceiver("127.0.0.1", 10000)
+    udpSender   = CSingleUDPSender  ("10.0.0.180", 20000)
 
     while True:
         iqData  = udpReceiver.read(iqSamplesPerFrame);
@@ -45,7 +47,10 @@ def DecimateUDP():
             if iqSampleBufferCount == incomingSampleCountPerDecimation:
                 decimatedSamples = iqSampleBuffer
                 for decimation in stagedFactors:
-                    decimatedSamples = sp.signal.decimate(decimatedSamples, decimation)
+                    decimatedSamples = sp.signal.decimate(decimatedSamples, decimation, ftype='fir')
+                    if not np.all(np.isfinite(decimatedSamples)):
+                        raise RuntimeError("Infinite")
+                udpSender.send(decimatedSamples)
                 iqSampleBufferCount = 0
 
 
