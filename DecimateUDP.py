@@ -17,41 +17,50 @@ def DecimateUDP():
     incomingSampleCountPerDecimation    = int(outgoingDecimatedSampleCount * totalDecimation)
     iqSamplesPerFrame                   = 1024
 
+    incomingSampleBuffer        = np.empty(incomingSampleCountPerDecimation, dtype=np.csingle)
+    incomingSampleBufferCount   = 0
+    firstUdpBuffer              = True
+    stagedFactors               = stagedDecimateFactors(incomingSampleRate, outgoingSampleRate)
 
-    iqSampleBuffer          = np.empty(incomingSampleCountPerDecimation, dtype=np.csingle)
-    iqSampleBufferCount     = 0
-    firstUdpBuffer          = True
-    stagedFactors           = stagedDecimateFactors(incomingSampleRate, outgoingSampleRate)
+    outgoingSequenceNumber      = 0
+    outgoingSampleBuffer        = np.empty(outgoingDecimatedSampleCount + 1, dtype=np.csingle)
+    outgoingSampleBuffer[0]     = complex(outgoingSequenceNumber, 0)
 
     udpReceiver = CSingleUDPReceiver("127.0.0.1", 10000)
-    udpSender   = CSingleUDPSender  ("127.0.0.1", 20000)
+    udpSender   = CSingleUDPSender  ("10.0.0.180", 20000)
 
     while True:
         iqData  = udpReceiver.read(iqSamplesPerFrame);
 
         if iqData is not None:
             if firstUdpBuffer:
-                expectedSeqNum = int(iqData[0].real)
+                incomingExpectedSeqNum = int(iqData[0].real)
             actualSeqNum = int(iqData[0].real)
-            if actualSeqNum != expectedSeqNum:
+            if actualSeqNum != incomingExpectedSeqNum:
                 print("OVERFLOW")
-            expectedSeqNum += 1
-            if expectedSeqNum == 65535:
-                expectedSeqNum = 0
+            incomingExpectedSeqNum += 1
+            if incomingExpectedSeqNum == 65536:
+                incomingExpectedSeqNum = 0
             iqSampleCount = iqData.size - 1
-            iqSampleBuffer[iqSampleBufferCount : iqSampleBufferCount + iqSampleCount] = iqData[1 : iqSampleCount + 1]
-            iqSampleBufferCount += iqSampleCount
+            incomingSampleBuffer[incomingSampleBufferCount : incomingSampleBufferCount + iqSampleCount] = iqData[1:]
+            incomingSampleBufferCount += iqSampleCount
 
-            if iqSampleBufferCount > incomingSampleCountPerDecimation:
-                raise RuntimeError("Buffer counts are wrong %d %d %d" % (iqSampleCount, iqSampleBufferCount, incomingSampleCountPerDecimation))
-            if iqSampleBufferCount == incomingSampleCountPerDecimation:
-                decimatedSamples = iqSampleBuffer
+            if incomingSampleBufferCount > incomingSampleCountPerDecimation:
+                raise RuntimeError("Buffer counts are wrong %d %d %d" % (iqSampleCount, incomingSampleBufferCount, incomingSampleCountPerDecimation))
+            if incomingSampleBufferCount == incomingSampleCountPerDecimation:
+                decimatedSamples = incomingSampleBuffer
                 for decimation in stagedFactors:
-                    decimatedSamples = sp.signal.decimate(decimatedSamples, decimation, ftype='fir')
+                    decimatedSamples = sp.signal.decimate(decimatedSamples, decimation, 4, ftype='iir')
                     if not np.all(np.isfinite(decimatedSamples)):
                         raise RuntimeError("Infinite")
-                udpSender.send(decimatedSamples)
-                iqSampleBufferCount = 0
+                outgoingSampleBuffer[1:] = decimatedSamples
+                udpSender.send(outgoingSampleBuffer)
+                print(",", end="")
+                incomingSampleBufferCount = 0
+                outgoingSampleBuffer[0]   = complex(outgoingSequenceNumber, 0)
+                outgoingSequenceNumber += 1
+                if outgoingSequenceNumber == 65536:
+                    outgoingSequenceNumber = 0
 
 
 if __name__ == '__main__':
