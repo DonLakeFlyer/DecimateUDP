@@ -2,7 +2,6 @@ from CSingleUDPReceiver     import *
 from CSingleUDPSender       import *
 from stagedDecimateFactors  import *
 
-
 import socket
 import math
 import numpy as np
@@ -12,10 +11,10 @@ from scipy import signal
 def DecimateUDP():
     incomingSampleRate                  = 3000000
     outgoingSampleRate                  = 4000
-    totalDecimation                     = 3000000 / 4000
+    totalDecimation                     = incomingSampleRate / outgoingSampleRate
     outgoingDecimatedSampleCount        = 1024
     incomingSampleCountPerDecimation    = int(outgoingDecimatedSampleCount * totalDecimation)
-    iqSamplesPerFrame                   = 1024
+    iqSamplesPerFrame                   = 2048
 
     incomingSampleBuffer        = np.empty(incomingSampleCountPerDecimation, dtype=np.csingle)
     incomingSampleBufferCount   = 0
@@ -52,7 +51,7 @@ def DecimateUDP():
                 for decimation in stagedFactors:
                     decimatedSamples = sp.signal.decimate(decimatedSamples, decimation, 4, ftype='iir')
                     if not np.all(np.isfinite(decimatedSamples)):
-                        raise RuntimeError("Infinite")
+                        raise RuntimeError("Decimate failed")
                 outgoingSampleBuffer[1:] = decimatedSamples
                 udpSender.send(outgoingSampleBuffer)
                 print(",", end="")
